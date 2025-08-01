@@ -28,9 +28,9 @@ pip install -r requirements.txt
 
 You need to run two scripts:
 
-> **python SFI.py # a calculator script for calculating the Sciatic Functional Index**
+> **python SFI.py # A script for calculating the Sciatic Functional Index (SFI) using data from Gait2SFI**
 > 
-> **python Gait2SFI.py  # a script for frame-by-frame search for the necessary rodent footprints on video.**
+> **python Gait2SFI.py  # A script for frame-by-frame search for the necessary rodent footprints on video.**
 
 ## Gait2SFI.py
 **To get started, you need to select a video recording of a rodent's gait in the Gait2SFI.py script dialog box.**
