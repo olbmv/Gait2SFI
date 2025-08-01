@@ -55,4 +55,6 @@ This table is needed for further statistical calculations.
 
 # Screenshots
 
+![Gait2SFI window](/Screenshots/Gait2SFI.png)
+![SFI calc window](/Screenshots/SFI_calc.png)
 
