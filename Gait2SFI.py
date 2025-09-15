@@ -160,7 +160,7 @@ class Gait2SFI:
         self.frame_entry.bind('<Return>', self.goto_frame)
         tk.Button(self.nav_frame, text="Go", command=self.goto_frame, font=("Arial", 12)).pack(side=tk.LEFT, padx=5)
         
-        self.root.title(f"Rat Gait SFI Analyzer - {self.video_path}")
+        self.root.title(f"Gait2SFI (Rodent Gait Analyzer) - {self.video_path}")
         
         self.show_first_frame()
         print("Video loaded successfully")  # Debug output
