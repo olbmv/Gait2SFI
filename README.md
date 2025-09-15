@@ -46,7 +46,7 @@ After all, for the SFI formula, the dimension of the parameters is irrelevant.
 
 **All measurements obtained must be entered manually into the SFI.py calculator window.**
 
-If the video image allows, you can also calculate the number of bright green pixels in the selected areas with prints **(Calculate Green Area button)**. **These values ​​can be used as a metric for limb restoration, since the area of ​​pressure against the glass will be higher on a healthy paw (and therefore the area of ​​green light)**. To use such a metric, you need to connect a green filter to the camera lens (it is shown in the screenshot below), or reduce the light sensitivity value in the camera settings (ISO)
+If the video image allows, you can also calculate the number of bright green pixels in the selected areas with prints **(Calculate Green Area button)**. **These values ​​can be used as a metric for limb restoration, since the area of ​​pressure against the glass will be higher on a healthy paw (and therefore the area of ​​green light)**. To use such a metric, you need to connect a green filter to the camera lens (it is shown in the screenshot below), or\and reduce the light sensitivity value in the camera settings (ISO)
 
 ## SFI.py
 
