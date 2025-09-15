@@ -50,10 +50,10 @@ If the video image allows, you can also calculate the number of bright green pix
 
 ## SFI.py
 
-After entering the fingerprint parameters into the calculator script, click on the bottom field in the SFI header.
-If all fields have correct numerical values, we will get the final SFI value. 
-It is worth noting that the **calculator script logs all entered data in a text table** in the same directory under the name **data.csv**. 
-This table is needed for further statistical calculations.
+After entering the fingerprint parameters into the calculator script, click on the bottom field in the SFI header. 
+If all fields are filled in correctly, we will receive the final SFI value. 
+It is worth noting that the calculator **script writes all entered data to a text table** in the Python environment directory, under the name **data.csv**. 
+This table is necessary for further statistical calculations.
 
 # Screenshots
 
