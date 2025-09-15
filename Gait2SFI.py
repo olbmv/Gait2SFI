@@ -541,7 +541,7 @@ class Gait2SFI:
         for p1, p2, distance in self.distances:
             p1[2].plot([p1[0], p2[0]], [p1[1], p2[1]], 'b-', linewidth=2)
             mid_x, mid_y = (p1[0] + p2[0])/2, (p1[1] + p2[1])/2
-            p1[2].text(mid_x, mid_y, f'{distance:.1f} px', 
+            p1[2].text(mid_x, mid_y, f'{distance:.1f}', 
                       color='white', backgroundcolor='black')
             p1[2].axis('off')
 
@@ -592,7 +592,7 @@ class Gait2SFI:
         for p1, p2, distance in self.distances:
             p1[2].plot([p1[0], p2[0]], [p1[1], p2[1]], 'b-', linewidth=2)
             mid_x, mid_y = (p1[0] + p2[0])/2, (p1[1] + p2[1])/2
-            p1[2].text(mid_x, mid_y, f'{distance:.1f} px', 
+            p1[2].text(mid_x, mid_y, f'{distance:.1f}', 
                       color='white', backgroundcolor='black')
             p1[2].axis('off')
         self.draw_canvas()
