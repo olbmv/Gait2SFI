@@ -5,7 +5,6 @@ Ideal for neuroscience, preclinical trials, and behavioral analysis in lab anima
 
 # Getting Started
 
-## Prerequisites
 The system has been tested on windows and linux environments.
 
 ## Installing
