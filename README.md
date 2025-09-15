@@ -21,7 +21,7 @@ git clone https://github.com/olbmv/Gait2SFI.git
 Then open the environment terminal with Gait2SFI directory and install the libraries needed to run the scripts:
 
 ```
-pip install -r requirements.txt
+pip install -r Gait2SFI\requirements.txt
 ```
 
 # How to Use
