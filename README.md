@@ -58,7 +58,8 @@ This table is necessary for further statistical calculations.
 
 ## Gait2Paws.py
 **To get started, you need to select a video recording of a rodent's gait in the Gait2Paws.py script dialog box.**
-Next, select the area where the animal walked and press Enter.
+The file named **video_example.mp4** is an example of a video recording of an animal walking for testing scripts.
+Next, select the area where the animal walked and press Enter. 
 The script will automatically select all footprints from the video and **write them to an array Paws**, which can then be used to plot graphs or write to a spreadsheet for analysis. 
 
 >Paws.append({
@@ -75,7 +76,8 @@ The script will automatically select all footprints from the video and **write t
 
 # Screenshots
 
+![Gait2Paws output](/Screenshots/Gait2Paws.gif)
 ![Gait2SFI window](/Screenshots/Gait2SFI.png)
 ![SFI calc window](/Screenshots/SFI_calc.png)
-![Gait2Paws output](/Screenshots/Gait2Paws.gif)
+
 
