@@ -30,6 +30,8 @@ You need to run two scripts:
 > **python Gait2SFI\SFI.py # A script for calculating the Sciatic Functional Index (SFI) using data from Gait2SFI**
 > 
 > **python Gait2SFI\Gait2SFI.py  # A script for frame-by-frame search for the necessary rodent footprints on video.**
+>
+> **python Gait2SFI\Gait2Paws.py  # A script for automatic gait visualization and footprint intensity assessment.**
 
 ## Gait2SFI.py
 **To get started, you need to select a video recording of a rodent's gait in the Gait2SFI.py script dialog box.**
@@ -54,8 +56,26 @@ If all fields are filled in correctly, we will receive the final SFI value.
 It is worth noting that the calculator **script writes all entered data to a text table** in the Python environment directory, under the name **data.csv**. 
 This table is necessary for further statistical calculations.
 
+## Gait2Paws.py
+**To get started, you need to select a video recording of a rodent's gait in the Gait2Paws.py script dialog box.**
+Next, select the area where the animal walked and press Enter.
+The script will automatically select all footprints from the video and **write them to an array Paws**, which can then be used to plot graphs or write to a spreadsheet for analysis. 
+
+>Paws.append({
+>                "paw": img_crop,
+>                "left_or_right": str(last_paw),
+>                "green_pixels": int(green_pixels),
+>                "blue_pixels": int(blue_pixels),
+>                "metric": blue_pixels / green_pixels,
+>                "step": counter,
+>                "time": int(time_ms)
+>            })
+
+**The script's output is a processed video file with the selected prints: rat_walks_output.mp4**
+
 # Screenshots
 
 ![Gait2SFI window](/Screenshots/Gait2SFI.png)
 ![SFI calc window](/Screenshots/SFI_calc.png)
+![Gait2Paws output](/Screenshots/Gait2Paws.gif)
 
