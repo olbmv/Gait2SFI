@@ -13,9 +13,21 @@ import numpy as np
 import matplotlib
 matplotlib.use('TkAgg')  # Explicitly set TkAgg backend
 from matplotlib import pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import time
 import sys
+
+class MyToolbar(NavigationToolbar2Tk):
+    
+    def release_zoom(self, event):
+        super().release_zoom(event)
+        # Automatically disable zoom after use
+        self.zoom()  # the second call disables
+
+    def release_pan(self, event):
+        super().release_pan(event)
+        self.pan()  # disable drag and drop of frame
+
 
 class Gait2SFI:
     def __init__(self):
@@ -58,6 +70,7 @@ class Gait2SFI:
         # GUI elements
         self.fig1, self.ax1 = plt.subplots(figsize=(8, 6), dpi=150)
         self.canvas1 = None
+        self.toolbar = None
         self.fig2 = None
         self.ax2 = None
         self.canvas2 = None
@@ -215,7 +228,10 @@ class Gait2SFI:
         self.ax1.set_title(f"Frame {self.current_frame}")
         self.canvas1 = FigureCanvasTkAgg(self.fig1, master=self.root)
         self.canvas1.draw()
-        self.canvas1.get_tk_widget().pack()
+        self.canvas1.get_tk_widget().pack(side=tk.TOP)
+
+        self.toolbar = MyToolbar(self.canvas1, self.root)
+        self.toolbar.update()
         
         self.canvas1.mpl_connect('button_press_event', self.on_press)
         self.canvas1.mpl_connect('motion_notify_event', self.on_motion)
@@ -225,7 +241,7 @@ class Gait2SFI:
         print("First frame displayed and event bindings set")  # Debug output
 
     def on_press(self, event):
-        if event.inaxes != self.ax1 or len(self.rectangles) >= 2:
+        if event.inaxes != self.ax1 or len(self.rectangles) >= 2 or self.toolbar.mode:
             return
         self.start_x = event.xdata
         self.start_y = event.ydata
@@ -236,7 +252,7 @@ class Gait2SFI:
         print(f"Started drawing rectangle at ({self.start_x:.1f}, {self.start_y:.1f}) on frame {self.current_frame}")
 
     def on_motion(self, event):
-        if self.current_rect is None or event.inaxes != self.ax1:
+        if self.current_rect is None or event.inaxes != self.ax1 or self.toolbar.mode:
             return
         width = event.xdata - self.start_x
         height = event.ydata - self.start_y
@@ -457,7 +473,7 @@ class Gait2SFI:
                 total_green_pixels += green_pixels
                 print(f"Frame {frame_idx}, Area {area_idx + 1} green pixels: {green_pixels}")
             
-            self.green_area_values[area_idx] = total_green_pixels
+            self.green_area_values[area_idx] = total_green_pixels   # OR self.green_area_values[area_idx] = total_green_pixels / len(frame_indices)
             print(f"Area {area_idx + 1} total green pixel count: {total_green_pixels}")
         
         # Close debug windows after calculation
