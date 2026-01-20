@@ -228,11 +228,10 @@ class Gait2SFI:
         self.ax1.set_title(f"Frame {self.current_frame}")
         self.canvas1 = FigureCanvasTkAgg(self.fig1, master=self.root)
         self.canvas1.draw()
+        self.toolbar = MyToolbar(self.canvas1, self.root)
+        self.toolbar.draw()
         self.canvas1.get_tk_widget().pack(side=tk.TOP)
 
-        self.toolbar = MyToolbar(self.canvas1, self.root)
-        self.toolbar.update()
-        
         self.canvas1.mpl_connect('button_press_event', self.on_press)
         self.canvas1.mpl_connect('motion_notify_event', self.on_motion)
         self.canvas1.mpl_connect('button_release_event', self.on_release)
