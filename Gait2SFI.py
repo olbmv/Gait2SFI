@@ -228,10 +228,13 @@ class Gait2SFI:
         self.ax1.set_title(f"Frame {self.current_frame}")
         self.canvas1 = FigureCanvasTkAgg(self.fig1, master=self.root)
         self.canvas1.draw()
+        if hasattr(self, 'toolbar') and self.toolbar is not None:
+           self.toolbar.destroy()
+           
         self.toolbar = MyToolbar(self.canvas1, self.root)
         self.toolbar.draw()
+            
         self.canvas1.get_tk_widget().pack(side=tk.TOP)
-
         self.canvas1.mpl_connect('button_press_event', self.on_press)
         self.canvas1.mpl_connect('motion_notify_event', self.on_motion)
         self.canvas1.mpl_connect('button_release_event', self.on_release)
@@ -556,8 +559,7 @@ class Gait2SFI:
         for p1, p2, distance in self.distances:
             p1[2].plot([p1[0], p2[0]], [p1[1], p2[1]], 'b-', linewidth=2)
             mid_x, mid_y = (p1[0] + p2[0])/2, (p1[1] + p2[1])/2
-            p1[2].text(mid_x, mid_y, f'{distance:.1f}', 
-                      color='white', backgroundcolor='black')
+            p1[2].text(mid_x, mid_y, f'{distance:.1f}', color='yellow')
             p1[2].axis('off')
 
     def update_area_frames(self):
@@ -599,16 +601,14 @@ class Gait2SFI:
             self.ax2[i].set_title(f"Area {i+1} (Frame {frame_idx})")
             self.ax2[i].axis('off')
             if self.green_area_values[i] is not None:
-                self.ax2[i].text(5, 10, f"Green: {self.green_area_values[i]} px", 
-                                color='white', backgroundcolor='black', fontsize=10)
+                self.ax2[i].text(5, 10, f"Green: {self.green_area_values[i]} px", color='white', backgroundcolor='black', fontsize=10)
             self.selected_areas.append((x, y, w, h))
             print(f"Updated area {i+1} at frame {frame_idx}: shape={area.shape}")
         
         for p1, p2, distance in self.distances:
             p1[2].plot([p1[0], p2[0]], [p1[1], p2[1]], 'b-', linewidth=2)
             mid_x, mid_y = (p1[0] + p2[0])/2, (p1[1] + p2[1])/2
-            p1[2].text(mid_x, mid_y, f'{distance:.1f}', 
-                      color='white', backgroundcolor='black')
+            p1[2].text(mid_x, mid_y, f'{distance:.1f}', color='red', fontsize=14)
             p1[2].axis('off')
         self.draw_canvas()
         print(f"Area frames updated in {time.time() - start_time:.3f}s")
@@ -627,8 +627,7 @@ class Gait2SFI:
                     distance = distance / 10  # Short digits; Del it if you want distance in pixels
                     p1[2].plot([p1[0], p2[0]], [p1[1], p2[1]], 'b-', linewidth=2)
                     mid_x, mid_y = (p1[0] + p2[0])/2, (p1[1] + p2[1])/2
-                    p1[2].text(mid_x, mid_y, f'{distance:.1f}', 
-                              color='white', backgroundcolor='black')
+                    p1[2].text(mid_x, mid_y, f'{distance:.1f}', color='red', fontsize=14)
                     self.distances.append((p1, p2, distance))
                     p1[2].axis('off')
                     self.draw_canvas()
