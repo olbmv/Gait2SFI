@@ -232,7 +232,7 @@ class Gait2SFI:
            self.toolbar.destroy()
            
         self.toolbar = MyToolbar(self.canvas1, self.root)
-        self.toolbar.draw()
+        self.toolbar.canvas.draw_idle()
             
         self.canvas1.get_tk_widget().pack(side=tk.TOP)
         self.canvas1.mpl_connect('button_press_event', self.on_press)
