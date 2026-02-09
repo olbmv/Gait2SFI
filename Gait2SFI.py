@@ -66,6 +66,7 @@ class Gait2SFI:
         # Green area calculation
         self.green_area_values = [None, None]  # [area1, area2]
         self.green_area_button = None  # Button for calculating green area
+        self.save_to_image = None  # Button for saving areas to image
         
         # GUI elements
         self.fig1, self.ax1 = plt.subplots(figsize=(8, 6), dpi=150)
@@ -314,7 +315,7 @@ class Gait2SFI:
             self.second_window = tk.Toplevel(self.root)
             self.second_window.title(f"Selected Areas (Pair {self.area_pair_counter})")
             
-            self.fig2, self.ax2 = plt.subplots(1, 2, figsize=(10, 5))
+            self.fig2, self.ax2 = plt.subplots(1, 2, figsize=(10, 3))
             self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.second_window)
             self.canvas2.get_tk_widget().pack()
             
@@ -378,6 +379,11 @@ class Gait2SFI:
                                              command=self.calculate_green_area, font=("Arial", 12))
             self.green_area_button.pack(pady=5)
             
+            # Add button for saving all distances
+            self.save_to_image= tk.Button(self.second_window, text="Save to image", 
+                                             command=self.save_all_dist, font=("Arial", 12))
+            self.save_to_image.pack(pady=5)
+            
             self.root.after(600, self.show_initial_areas)
             print(f"Second window setup in {time.time() - start_time:.3f}s")
         except Exception as e:
@@ -423,6 +429,16 @@ class Gait2SFI:
         else:
             print(f"LUT not applied (using default alpha=1.0, beta=0.0) in {time.time() - start_time:.3f}s")
         return adjusted
+        
+    def save_all_dist(self):
+        path = os.path.basename(self.video_path)
+        filename = os.path.splitext(os.path.basename(path))[0]
+        self.fig2.savefig(f"{filename}_Pair#{self.area_pair_counter}", 
+                  dpi=300, 
+                  bbox_inches='tight',
+                  facecolor='white',
+                  edgecolor='none',
+                  pad_inches=0.1)
 
     def calculate_green_area(self):
         print("Calculating green area for both regions")
@@ -608,7 +624,7 @@ class Gait2SFI:
         for p1, p2, distance in self.distances:
             p1[2].plot([p1[0], p2[0]], [p1[1], p2[1]], 'b-', linewidth=2)
             mid_x, mid_y = (p1[0] + p2[0])/2, (p1[1] + p2[1])/2
-            p1[2].text(mid_x, mid_y, f'{distance:.1f}', color='red', fontsize=14)
+            p1[2].text(mid_x, mid_y, f'{distance:.1f}', color='red', fontsize=28)
             p1[2].axis('off')
         self.draw_canvas()
         print(f"Area frames updated in {time.time() - start_time:.3f}s")
