@@ -214,3 +214,5 @@ The quality of the segmentation depends chiefly on the recording. A green filter
 If this software is used in published work, please cite the accompanying publication and this repository.
 
 ## Screenshots
+
+![Demo](Screenshots/Gait2Paws.gif)
