@@ -214,9 +214,7 @@ The quality of the segmentation depends chiefly on the recording. A green filter
 If this software is used in published work, please cite the accompanying publication and this repository.
 
 ## Screenshots
-
-Gait2SFI Demo
-![Demo](Screenshots/Gait2SFI.mp4)
+Gait2SFI Demo (full video in Demo.mp4) 
 
 Gait2Paws Demo
 ![Demo](Screenshots/Gait2Paws.gif)
