@@ -215,4 +215,8 @@ If this software is used in published work, please cite the accompanying publica
 
 ## Screenshots
 
+Gait2SFI Demo
+![Demo](Screenshots/Gait2SFI.mp4)
+
+Gait2Paws Demo
 ![Demo](Screenshots/Gait2Paws.gif)
