@@ -1,5 +1,11 @@
+# Python 3.9 or later.
+#
+# tkinter is part of the Python standard library and cannot be installed
+# with pip. On Windows and in Anaconda distributions it is included with
+# Python itself. On Linux it may be a separate system package: see the
+# "Installation on Linux" section of the README.
+
 opencv-python
 numpy
 matplotlib
-tkinter
-pandas
+pillow
