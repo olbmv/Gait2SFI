@@ -52,6 +52,9 @@ sudo dnf install python3-tkinter mesa-libGL     # Fedora / RHEL
 | `Gait2SFI.py` | Frame-by-frame search for hind paw prints and measurement of SFI parameters |
 | `SFI.py` | Calculator that converts the measured parameters into the Sciatic Functional Index |
 | `Gait2Paws.py` | Unsupervised detection and labelling of all paw contacts in a recording |
+| `video_example.mp4` | Sample recording for script testing |
+| `Gait2SFI_Demo.mp4` | Demo for Gait2SFI |
+| `Gait2Paws_Demo.mp4` | Demo for Gait2Paws |
 
 `Gait2SFI.py` and `SFI.py` are used together and must reside in the same directory. `Gait2Paws.py` is independent and may be run separately.
 
