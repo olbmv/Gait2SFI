@@ -26,8 +26,24 @@ git clone https://github.com/olbmv/Gait2SFI.git
 Alternatively, download the files manually and copy them into the environment directory. Then, from the environment terminal, install the required libraries:
 
 ```
-pip install -r Gait2SFI\requirements.txt
+pip install -r Gait2SFI/requirements.txt        # Linux
+pip install -r Gait2SFI\requirements.txt        # Windows
 ```
+
+The requirements install OpenCV, NumPy, matplotlib and Pillow. Every other module used by the scripts belongs to the Python standard library.
+
+#### Installation on Linux
+
+`tkinter` is part of the Python standard library, and is included with the Python interpreter on Windows and in Anaconda environments. On Linux distributions that use a system Python, it is provided by a separate package that must be installed before the scripts are run:
+
+```
+sudo apt install python3-tk libgl1     # Debian / Ubuntu
+sudo dnf install python3-tkinter mesa-libGL     # Fedora / RHEL
+```
+
+`libgl1` (or `mesa-libGL`) is required by OpenCV to load its shared libraries. If the scripts are run inside an Anaconda environment on Linux, no additional system packages are required.
+
+
 
 ### Contents of the package
 
