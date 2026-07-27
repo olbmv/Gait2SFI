@@ -208,14 +208,6 @@ All thresholds expressed in pixels refer to full-resolution pixels and are there
 
 The quality of the segmentation depends chiefly on the recording. A green filter fitted to the objective, or a reduction of the sensitivity setting of the camera, increases the separation between the contacts and the red illumination of the body. The frame rate should be sufficient for a stance phase to span several frames, so that the frame of maximum contact can be identified. The glass should be cleaned between animals, since residues scatter light and are indistinguishable from contacts within a single frame.
 
-## Verification
-
-The package includes test suites covering the segmentation of contacts, the parsing of frame selections, the caching of per-frame results, navigation within a selection, the transfer of measurements to the calculator, the arithmetic of the index, the naming of output files, and the labelling of limbs.
-
-```
-python test_gait2paws.py
-python test_frames_naming.py
-```
 
 ## Citation
 
