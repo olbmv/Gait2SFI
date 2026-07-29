@@ -47,20 +47,23 @@ class Gait2SFI:
         self.update_interval = 0.1  # Limit updates to ~10 fps
         self.area1_frame_indices = []  # Indices for area 1 frames
         self.area2_frame_indices = []  # Indices for area 2 frames
-        self.current_area_index = 0  # 0-BASED index into area*_frame_indices
+        self.area_indices = [0, 0]   # 0-BASED position of each area in its own sequence
         self.current_frame = 0
         self.area_pair_counter = 0  # Counter for selected area pairs
         self.second_wn_frames_limit = 15
         self.n_area_frames = 0       # actual number of frames available in the pair
 
         # Re-entrancy guards / debounce handles for the second window
-        self._suppress_slider_cb = False
+        self._expected_slider_value = [None, None]  # value we wrote ourselves
+        self._slider_dragging = [False, False]      # pointer is holding the handle
+        self._second_window_job = None              # pending setup_second_window call
         self._suppress_lut_cb = False
         self._area_redraw_job = None
         self._main_redraw_job = None
-        self._suppress_frame_slider_cb = False
+        self._expected_frame_slider_value = None
         self._suppression_jobs = []   # pending after_idle guard-release callbacks
-        self.area_counter_label = None
+        self.area_sliders = [None, None]
+        self.area_counter_labels = [None, None]
         
         # Selection variables
         self.rectangles = []  # List of (x, y, w, h, frame_idx) in original size
@@ -111,7 +114,7 @@ class Gait2SFI:
         self.frame_entry = None   # Entry for frame number
         self.frame_range = None   # Entry for frame range in second window
         self.nav_frame = None     # Frame for navigation controls
-        self.area_slider = None   # Slider for second window
+        self.area_sliders = [None, None]   # one slider per selected area
         self.area_entry = None    # Entry for area frame offset
         self.contrast_slider = None  # Slider for contrast
         self.brightness_slider = None  # Slider for brightness
@@ -162,7 +165,7 @@ class Gait2SFI:
         self.current_frame = 1
         self.area1_frame_indices = []
         self.area2_frame_indices = []
-        self.current_area_index = 0
+        self.area_indices = [0, 0]
         self.n_area_frames = 0
         self.area_pair_counter = 0
         self.rectangles = []
@@ -195,7 +198,7 @@ class Gait2SFI:
             self.fig2 = None
             self.ax2 = None
             self.canvas2 = None
-            self.area_slider = None
+            self.area_sliders = [None, None]
             self.area_entry = None
             self.contrast_slider = None
             self.brightness_slider = None
@@ -231,7 +234,7 @@ class Gait2SFI:
         tk.Button(self.nav_frame, text="Go", command=self.goto_frame, font=("Arial", 12)).grid(row=0, column=3, padx=5)
         tk.Button(self.nav_frame, text="▶", padx=10, pady=5, command=lambda: self.goto_frame(1)).grid(row=0, column=4)
 
-   
+        # Вторая строка
         tk.Label(
            self.nav_frame,
            text="Set how many frames to take from the selection",
@@ -373,7 +376,14 @@ class Gait2SFI:
                     valid_areas = False
                     print(f"Error: Area {i+1} too small: {width:.1f}x{height:.1f} pixels")
             if valid_areas:
-                self.root.after(500, self.setup_second_window)
+                # Cancel a pending call so a doubled mouse release cannot open
+                # two windows at once.
+                if self._second_window_job is not None:
+                    try:
+                        self.root.after_cancel(self._second_window_job)
+                    except (tk.TclError, ValueError):
+                        pass
+                self._second_window_job = self.root.after(500, self.setup_second_window)
             else:
                 messagebox.showerror("Error", "Selected areas are too small (must be at least 10x10 pixels).")
                 self.rectangles = []
@@ -382,17 +392,74 @@ class Gait2SFI:
                 self.start_y = None
                 self.update_frame()
 
+    def discard_second_window(self):
+        """
+        Tear down the widgets of an open second window WITHOUT touching the
+        selected rectangles, which the caller still needs.
+        """
+        if self.second_window is None:
+            return
+        print("Discarding the previous second window before opening a new one")
+        for jid in list(self._suppression_jobs):
+            try:
+                (self.root or self.second_window).after_cancel(jid)
+            except (tk.TclError, ValueError):
+                pass
+        self._suppression_jobs = []
+        if self._area_redraw_job is not None:
+            try:
+                self.second_window.after_cancel(self._area_redraw_job)
+            except (tk.TclError, ValueError):
+                pass
+            self._area_redraw_job = None
+        try:
+            self.second_window.destroy()
+        except tk.TclError:
+            pass
+        if self.fig2 is not None:
+            try:
+                plt.close(self.fig2)
+            except Exception:
+                pass
+        self.second_window = None
+        self.canvas2 = None
+        self.fig2 = None
+        self.ax2 = None
+        self.area_sliders = [None, None]
+        self.area_counter_labels = [None, None]
+        self.contrast_slider = None
+        self.brightness_slider = None
+        self.green_area_button = None
+        self.sum_green_area_button = None
+        self.sum_frames_entry = None
+        self.save_to_image = None
+        self.run_sfi_button = None
+        self.sfi_status_label = None
+        self._expected_slider_value = [None, None]
+        self._slider_dragging = [False, False]
+
     def setup_second_window(self):
         print("Opening second window with two selected areas")
         start_time = time.time()
+
+        # A previous window would otherwise stay on screen with sliders scaled
+        # to the OLD frame count, while its callbacks still drive the current
+        # state. Dragging such a stale slider caps the position at the old
+        # limit - "set 25 frames, the slider throws you back to 15".
+        self.discard_second_window()
+
+        self._second_window_job = None
+
         self.area_pair_counter += 1
 
-        frame_range = int(self.frame_range.get())
-        if frame_range>1 and frame_range<100:
-          self.second_wn_frames_limit=frame_range
-        else:
-          print("Invalid number of frame range") 
-          self.second_wn_frames_limit = 15
+        try:
+            requested = int(self.frame_range.get())
+        except (ValueError, TypeError):
+            requested = 15
+        if not (2 <= requested <= 100):
+            print(f"Invalid frame count {requested!r}, falling back to 15")
+            requested = 15
+        self.second_wn_frames_limit = requested
 
         try:
             self.second_window = tk.Toplevel(self.root)
@@ -401,9 +468,20 @@ class Gait2SFI:
             self.fig2, self.ax2 = plt.subplots(1, 2, figsize=(10, 3))
             self.canvas2 = FigureCanvasTkAgg(self.fig2, master=self.second_window)
             self.canvas2.get_default_filename = self.area_canvas_filename
-            self.canvas2.get_tk_widget().pack()
-            
+
             self.second_window.protocol("WM_DELETE_WINDOW", self.on_second_window_close)
+
+            # The controls live in one container that is packed BEFORE the
+            # canvas. Tk hands out space in packing order, not by 'side', so
+            # whatever is packed last is the first thing squeezed out when the
+            # window cannot be as tall as the sum of the requested sizes. The
+            # canvas asks for a large area, so on a smaller screen the buttons
+            # below it - "Run SFI calc" in particular - were pushed outside the
+            # visible area and disappeared. Reserving the strip first fixes it;
+            # the canvas then takes whatever is left and shrinks instead.
+            controls = tk.Frame(self.second_window)
+            controls.pack(side=tk.BOTTOM, fill=tk.X)
+            self.canvas2.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             
             self.canvas2.mpl_connect('button_press_event', self.on_measure_or_clear)
             
@@ -425,9 +503,14 @@ class Gait2SFI:
             # instead of being padded with duplicated frames.
             avail1 = self.total_frames - frame_idx1
             avail2 = self.total_frames - frame_idx2
-            n = min(self.second_wn_frames_limit, avail1, avail2)
+            # Each area keeps its own length. Forcing them equal used to
+            # truncate a perfectly good selection just because the OTHER one
+            # sat close to the end of the recording.
+            n1 = min(self.second_wn_frames_limit, avail1)
+            n2 = min(self.second_wn_frames_limit, avail2)
+            n = max(n1, n2)
 
-            if n < 1:
+            if min(n1, n2) < 1:
                 messagebox.showerror(
                     "Error",
                     "Not enough frames after the selection point. "
@@ -436,47 +519,92 @@ class Gait2SFI:
                 self.on_second_window_close()
                 return
 
-            if n < self.second_wn_frames_limit:
+            if min(n1, n2) < self.second_wn_frames_limit:
+                last = self.total_frames - 1
                 print(f"Warning: only {n} frames available instead of "
                       f"{self.second_wn_frames_limit} (end of video reached)")
+                messagebox.showwarning(
+                    "Fewer frames than requested",
+                    f"You asked for {self.second_wn_frames_limit} frames from the "
+                    f"selection, but only {n} are available.\n\n"
+                    f"The last frame of the video is {last}; the selections start "
+                    f"on frames {frame_idx1} (Area 1) and {frame_idx2} (Area 2), "
+                    f"which leave {avail1} and {avail2} frames respectively.\n\n"
+                    f"Move the selections earlier if you need more frames."
+                )
+
+            # Actual/requested counts are shown in the title so the discrepancy
+            # stays visible even after the dialog has been dismissed.
+            if min(n1, n2) < self.second_wn_frames_limit:
+                title_frames = (f"{n1}/{n2} of {self.second_wn_frames_limit} frames"
+                                if n1 != n2 else
+                                f"{n1}/{self.second_wn_frames_limit} frames")
+            else:
+                title_frames = f"{n} frames"
+            self.second_window.title(
+                f"Selected Areas (Pair {self.area_pair_counter}) - {title_frames}")
 
             # Both lists always have EXACTLY the same length == n,
             # because a single index is used to address both of them.
-            self.area1_frame_indices = list(range(frame_idx1, frame_idx1 + n))
-            self.area2_frame_indices = list(range(frame_idx2, frame_idx2 + n))
+            self.area1_frame_indices = list(range(frame_idx1, frame_idx1 + n1))
+            self.area2_frame_indices = list(range(frame_idx2, frame_idx2 + n2))
             self.n_area_frames = n
 
-            self.current_area_index = 0  # 0-based: first frame of the selection
+            self.area_indices = [0, 0]   # both start on the selected frame
 
             print(f"Area 1 frame indices: {self.area1_frame_indices}")
             print(f"Area 2 frame indices: {self.area2_frame_indices}")
+            print(f"Sliders will span 1..{n1} and 1..{n2}")
             
-            nav_frame = tk.Frame(self.second_window)
-            nav_frame.pack(pady=5)
+            # One navigation row per area. The two prints come from different
+            # steps of different paws, so coupling them to a single slider was
+            # arbitrary: each is refined on its own timeline.
+            nav_frame = tk.Frame(controls)
+            nav_frame.pack(pady=(6, 2))
 
-                       
-            tk.Button(nav_frame, text="◀", padx=10, pady=5,
-                      command=lambda: self.goto_area_frame(-1)).pack(side=tk.LEFT)
-            tk.Label(nav_frame, text="Frame in selection:", font=("Arial", 12)).pack(side=tk.LEFT, padx=5)
-            self.area_counter_label = tk.Label(nav_frame, text=f"1 / {n}", font=("Arial", 12, "bold"), width=8)
-            self.area_counter_label.pack(side=tk.LEFT, padx=5)
-            tk.Button(nav_frame, text="▶", padx=10, pady=5,
-                      command=lambda: self.goto_area_frame(1)).pack(side=tk.LEFT)
+            area_names = ["Area 1", "Area 2"]
+            lengths = [len(self.area1_frame_indices), len(self.area2_frame_indices)]
 
-            # Bind the arrows to the WINDOW, not to the frame:
-            # a tk.Frame never receives the keyboard focus, so the old
-            # nav_frame.bind(...) never fired.
-            self.second_window.bind('<Left>', lambda _: self.goto_area_frame(-1))
-            self.second_window.bind('<Right>', lambda _: self.goto_area_frame(1))
+            for i in range(2):
+                row = tk.Frame(nav_frame)
+                row.pack(pady=1)
 
-            # Slider is 1-based for the user, current_area_index is 0-based internally.
-            self.area_slider = tk.Scale(self.second_window, from_=1, to=n, resolution=1,
-                                        orient=tk.HORIZONTAL, length=400,
-                                        command=self.on_area_slider_change)
-            self._set_area_slider_silently(1)
-            self.area_slider.pack(pady=10)
+                tk.Label(row, text=f"{area_names[i]}:", font=("Arial", 11, "bold"),
+                         width=7, anchor="e").pack(side=tk.LEFT, padx=(4, 6))
+                tk.Button(row, text="◀", padx=8, pady=2,
+                          command=lambda a=i: self.goto_area_frame(a, -1)).pack(side=tk.LEFT)
+
+                self.area_counter_labels[i] = tk.Label(
+                    row, text=f"1 / {lengths[i]}", font=("Arial", 11, "bold"), width=9)
+                self.area_counter_labels[i].pack(side=tk.LEFT, padx=4)
+
+                tk.Button(row, text="▶", padx=8, pady=2,
+                          command=lambda a=i: self.goto_area_frame(a, 1)).pack(side=tk.LEFT)
+
+                # Slider is 1-based for the user, area_indices[i] is 0-based.
+                self.area_sliders[i] = tk.Scale(
+                    row, from_=1, to=max(1, lengths[i]), resolution=1,
+                    orient=tk.HORIZONTAL, length=180, showvalue=0,
+                    command=lambda v, a=i: self.on_area_slider_change(a, v))
+                # No fill/expand: the slider used to stretch to the window width
+                self.area_sliders[i].pack(side=tk.LEFT, padx=(8, 6))
+                # add='+' keeps Tk's own Scale bindings intact
+                self.area_sliders[i].bind('<Button-1>',
+                                          lambda e, a=i: self._on_slider_press(a), add='+')
+                self.area_sliders[i].bind('<ButtonRelease-1>',
+                                          lambda e, a=i: self._on_slider_release(a), add='+')
+                self._set_area_slider_silently(i, 1)
+
+            tk.Label(nav_frame,
+                     text="Arrow keys move both areas together",
+                     font=("Arial", 8), fg="gray40").pack(pady=(2, 0))
+
+            # Bound to the WINDOW, not to a frame: a tk.Frame never takes the
+            # keyboard focus, so binding there would never fire.
+            self.second_window.bind('<Left>', lambda _: self.step_both_areas(-1))
+            self.second_window.bind('<Right>', lambda _: self.step_both_areas(1))
             
-            contrast_frame = tk.Frame(self.second_window)
+            contrast_frame = tk.Frame(controls)
             contrast_frame.pack(pady=5)
             tk.Label(contrast_frame, text="Contrast:", font=("Arial", 12)).pack(side=tk.LEFT, padx=5)
             self.contrast_slider = tk.Scale(contrast_frame, from_=0.5, to=2.0, resolution=0.1, orient=tk.HORIZONTAL,
@@ -491,19 +619,20 @@ class Gait2SFI:
             tk.Button(contrast_frame, text="Reset", command=self.reset_lut, font=("Arial", 12)).pack(side=tk.LEFT, padx=5)
             
             # Add button for green area calculation
-            self.green_area_button = tk.Button(self.second_window, text="Find maximum contact area", 
+            self.green_area_button = tk.Button(controls, text="Find maximum contact area", 
                                              command=self.calculate_green_area, font=("Arial", 12))
             self.green_area_button.pack(pady=5)
 
             # Add button for green sum frames + selective frame range
-            sum_frame = tk.Frame(self.second_window)
+            sum_frame = tk.Frame(controls)
             sum_frame.pack(pady=5)
 
             self.sum_green_area_button = tk.Button(sum_frame, text="Show total contact area",
                                                    command=self.sum_green_area, font=("Arial", 12))
             self.sum_green_area_button.pack(side=tk.LEFT, padx=5)
 
-            tk.Label(sum_frame, text="Sum frames:", font=("Arial", 12)).pack(side=tk.LEFT, padx=(10, 2))
+            tk.Label(sum_frame, text="Composite footprint:",
+                     font=("Arial", 12)).pack(side=tk.LEFT, padx=(10, 2))
             self.sum_frames_entry = tk.Entry(sum_frame, width=16, font=("Arial", 12))
             self.sum_frames_entry.insert(0, f"1-{n}")
             self.sum_frames_entry.pack(side=tk.LEFT, padx=2)
@@ -511,19 +640,19 @@ class Gait2SFI:
             tk.Button(sum_frame, text="All", command=self.reset_frame_selection,
                       font=("Arial", 10)).pack(side=tk.LEFT, padx=2)
 
-            tk.Label(self.second_window,
+            tk.Label(controls,
                      text=f"Format: 1-{n} (range), 1,2,3,8 (list), 1-3,5,8-10 (mixed)",
                      font=("Arial", 9), fg="gray30").pack()
             
             # Add button for saving all distances
-            self.save_to_image= tk.Button(self.second_window, text="Save to image", 
+            self.save_to_image= tk.Button(controls, text="Save to image", 
                                              command=self.save_all_dist, font=("Arial", 12))
             self.save_to_image.pack(pady=5)
 
             # Bottom bar: "Run SFI calc" pinned to the bottom-right corner.
             # Packed with side=BOTTOM so it stays at the very bottom no matter
             # how the widgets above are laid out.
-            bottom_bar = tk.Frame(self.second_window)
+            bottom_bar = tk.Frame(controls)
             bottom_bar.pack(side=tk.BOTTOM, fill=tk.X, padx=10, pady=8)
             self.run_sfi_button = tk.Button(bottom_bar, text="Run SFI calc",
                                             command=self.run_sfi_calc,
@@ -538,6 +667,19 @@ class Gait2SFI:
             if self.sfi_app is not None:
                 self.on_sfi_arm_change(getattr(self.sfi_app, 'armed', None))
             
+            # Keep the window within the usable screen height: if the layout
+            # asks for more than the screen has, the window manager clips the
+            # bottom and the controls go with it.
+            self.second_window.update_idletasks()
+            want_h = self.second_window.winfo_reqheight()
+            want_w = self.second_window.winfo_reqwidth()
+            avail_h = self.second_window.winfo_screenheight() - 120
+            if want_h > avail_h:
+                print(f"Second window: layout wants {want_h} px, screen offers "
+                      f"{avail_h}; shrinking the image area")
+                self.second_window.geometry(f"{want_w}x{avail_h}")
+            self.second_window.minsize(600, min(480, want_h))
+
             self.root.after(600, self.show_initial_areas)
             print(f"Second window setup in {time.time() - start_time:.3f}s")
         except Exception as e:
@@ -569,7 +711,7 @@ class Gait2SFI:
             self.fig2 = None
             self.ax2 = None
             self.canvas2 = None
-            self.area_slider = None
+            self.area_sliders = [None, None]
             self.area_entry = None
             self.contrast_slider = None
             self.brightness_slider = None
@@ -590,10 +732,11 @@ class Gait2SFI:
             self.distances = []
             self.area1_frame_indices = []
             self.area2_frame_indices = []
-            self.current_area_index = 0
+            self.area_indices = [0, 0]
             self.n_area_frames = 0
-            self.area_counter_label = None
-            self._suppress_slider_cb = False
+            self.area_counter_labels = [None, None]
+            self._expected_slider_value = [None, None]
+            self._slider_dragging = [False, False]
             self._suppress_lut_cb = False
             self.contrast_alpha = 1.0
             self.contrast_beta = 0.0
@@ -663,20 +806,18 @@ class Gait2SFI:
                   edgecolor='none',
                   pad_inches=0.1)
         print(f"Areas saved to: {path}")
-        messagebox.showinfo("Done",f"Areas saved to: {path}")
-
 
     """
     Worse way to detect only green
     def greenness_mask(self, bgr, thr_frac=0.18, blur=3):
         
         b, g, r = cv2.split(bgr.astype(np.float32))
-        green = g - cv2.max(r, b)                 
+        green = g - cv2.max(r, b)                 # доминирование зелёного
         green = np.clip(green, 0, 255)
         if blur:
           green = cv2.GaussianBlur(green, (blur, blur), 0)
         gmax = float(green.max())
-        norm = green / gmax if gmax > 0 else green   
+        norm = green / gmax if gmax > 0 else green   # нормировка 0..1
         mask = (norm > thr_frac).astype(np.uint8) * 255
         return norm, mask
     """
@@ -696,7 +837,7 @@ class Gait2SFI:
            g_blur = g
         # two absolute conditions at once: dominance and brightness
         mask = ((green > green_min) & (g_blur > v_min)).astype(np.uint8) * 255
-        norm = np.clip(green / 255.0, 0, 1)   
+        norm = np.clip(green / 255.0, 0, 1)   # БЕЗ деления на per-image максимум
         return norm, mask
    
 
@@ -771,12 +912,13 @@ class Gait2SFI:
             messagebox.showerror("Error", "VideoCapture not initialized or closed.")
             return False
 
-        n = self.area_frame_count()
-        if n == 0:
+        counts = self.area_frame_counts()
+        n = max(counts)
+        if min(counts) == 0:
             print("Error: No area frames available")
             return False
 
-        print(f"Green cache miss - processing {n} frames x 2 areas")
+        print(f"Green cache miss - processing {counts[0]} + {counts[1]} frames")
         messagebox.showinfo(
             "Processing",
             f"Please wait, analysing {n} frames of this pair...\n"
@@ -784,16 +926,18 @@ class Gait2SFI:
         )
 
         start_time = time.time()
+        # Each area keeps its own length: the two sequences may differ when one
+        # selection sits closer to the end of the recording.
         cache = {
-            'green': [[None] * n, [None] * n],   # 2D uint8 green channel, masked
-            'counts': [[0] * n, [0] * n],        # green pixel count per frame
+            'green': [[None] * counts[0], [None] * counts[1]],
+            'counts': [[0] * counts[0], [0] * counts[1]],
             'frames': [list(self.area1_frame_indices), list(self.area2_frame_indices)],
         }
 
         try:
             for area_idx in range(2):
                 x, y, w, h, _ = self.rectangles[area_idx]
-                for p in range(n):
+                for p in range(counts[area_idx]):
                     frame_idx = cache['frames'][area_idx][p]
                     self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
                     ret, frame = self.cap.read()
@@ -822,7 +966,8 @@ class Gait2SFI:
 
         self.green_cache = cache
         self.green_cache_key = key
-        print(f"Green cache built for {n} frames in {time.time() - start_time:.3f}s")
+        print(f"Green cache built for {counts[0]}+{counts[1]} frames in "
+              f"{time.time() - start_time:.3f}s")
 
         if self.second_window is not None:
             try:
@@ -848,6 +993,9 @@ class Gait2SFI:
             best_count = 0
             best_record = 0
             for p in positions:
+                # A position may exist in one area and not in the other
+                if p >= len(cache['green'][area_idx]):
+                    continue
                 green_ch = cache['green'][area_idx][p]
                 if green_ch is None:
                     continue
@@ -902,6 +1050,18 @@ class Gait2SFI:
             if isinstance(rec, (list, tuple)) and len(rec) >= 2:
                 self.frame_override[i] = rec[1]
                 print(f"Area {i+1} pinned to video frame {rec[1]}")
+
+        # Each area now has its own slider, so each one moves to its own
+        # maximum - the two no longer have to agree on a single position.
+        counts = self.area_frame_counts()
+        pinned = self.pinned_positions()
+        for i in range(2):
+            if pinned[i] is not None:
+                self.area_indices[i] = pinned[i]
+                self._set_area_slider_silently(i, pinned[i] + 1)
+                print(f"Area {i+1}: navigation moved to position "
+                      f"{pinned[i] + 1} of {counts[i]}")
+        self._update_area_counter_label()
 
         self.update_area_frames()
 
@@ -1015,20 +1175,25 @@ class Gait2SFI:
             print("Error: Second window figure, axes, or window not initialized")
             return
         
-        n = self.area_frame_count()
-        if n == 0:
+        if min(self.area_frame_counts()) == 0:
             print("Error: No area frames available")
             return
 
         # Last line of defence: the index can never leave the valid range
-        if not (0 <= self.current_area_index < n):
-            print(f"Warning: area index {self.current_area_index} out of range 0..{n-1}, clamping")
-            self.current_area_index = max(0, min(self.current_area_index, n - 1))
-            self._set_area_slider_silently(self.current_area_index + 1)
+        counts = self.area_frame_counts()
+        lists = self.area_frame_lists()
+        frame_indices = []
+        for i in range(2):
+            # Last line of defence: an index can never leave its own range
+            if not (0 <= self.area_indices[i] < counts[i]):
+                print(f"Warning: area {i+1} index {self.area_indices[i]} out of "
+                      f"range 0..{counts[i]-1}, clamping")
+                self.area_indices[i] = max(0, min(self.area_indices[i], counts[i] - 1))
+                self._set_area_slider_silently(i, self.area_indices[i] + 1)
+            frame_indices.append(lists[i][self.area_indices[i]])
 
-        print(f"update_area_frames: index {self.current_area_index} of {n}")
-        frame_indices = [self.area1_frame_indices[self.current_area_index],
-                         self.area2_frame_indices[self.current_area_index]]
+        print(f"update_area_frames: positions {[p+1 for p in self.area_indices]} "
+              f"of {counts}")
         self.selected_areas = []
         num_ar=[0,0]
 
@@ -1132,13 +1297,11 @@ class Gait2SFI:
         return max(0, self.total_frames - 1)
 
     def _set_frame_slider_silently(self, value):
+        """Value-based guard, for the same reason as the area sliders."""
         if self.frame_slider is None:
             return
-        self._suppress_frame_slider_cb = True
-        try:
-            self.frame_slider.set(int(value))
-        finally:
-            self._clear_suppression_later('_suppress_frame_slider_cb')
+        self._expected_frame_slider_value = int(value)
+        self.frame_slider.set(int(value))
 
     def set_current_frame(self, index):
         """Single clamped entry point for main-window navigation."""
@@ -1170,9 +1333,11 @@ class Gait2SFI:
         self.update_frame()
 
     def on_slider_change(self, value):
-        if self._suppress_frame_slider_cb:
-            return
         new_index = max(0, min(int(float(value)), self.last_frame_index()))
+
+        if self._expected_frame_slider_value == new_index:
+            self._expected_frame_slider_value = None
+            return
         if new_index == self.current_frame:
             return
         self.last_update_time = time.time()
@@ -1214,16 +1379,27 @@ class Gait2SFI:
 
     # ------------------------------------------------------------------
     #  Second-window navigation helpers
-    #  Single source of truth: self.current_area_index, 0-based,
+    #  Single source of truth: self.area_indices[area], 0-based,
     #  always in the range 0 .. n_area_frames-1.
     #  The slider shows index+1 (1..n) so that the user sees 1-based numbers.
     # ------------------------------------------------------------------
 
-    def area_frame_count(self):
-        """Number of frames that can be scrolled through (both areas always equal)."""
-        if not self.area1_frame_indices or not self.area2_frame_indices:
-            return 0
-        return min(len(self.area1_frame_indices), len(self.area2_frame_indices))
+    def area_frame_lists(self):
+        return [self.area1_frame_indices, self.area2_frame_indices]
+
+    def area_frame_counts(self):
+        """Length of each area's own sequence; the two may differ."""
+        return [len(self.area1_frame_indices), len(self.area2_frame_indices)]
+
+    def area_frame_count(self, area=None):
+        """
+        Frames available for one area, or - when no area is given - the longest
+        of the two. Kept for the places that only need "is there anything here".
+        """
+        counts = self.area_frame_counts()
+        if area is None:
+            return max(counts) if counts else 0
+        return counts[area] if 0 <= area < len(counts) else 0
 
     def _clear_suppression_later(self, attr):
         """
@@ -1253,22 +1429,112 @@ class Gait2SFI:
         except tk.TclError:
             setattr(self, attr, False)
 
-    def _set_area_slider_silently(self, slider_value):
-        """Move the slider without triggering a second redraw."""
-        if self.area_slider is None:
-            return
-        self._suppress_slider_cb = True
-        try:
-            self.area_slider.set(int(slider_value))
-        finally:
-            self._clear_suppression_later('_suppress_slider_cb')
+    def _set_area_slider_silently(self, area, slider_value):
+        """
+        Move one area's slider without reacting to the callback it will fire.
 
-    def _update_area_counter_label(self):
-        if self.area_counter_label is not None:
+        The guard is on the VALUE, not on a time window. tk.Scale fires its
+        -command asynchronously, so a flag set around .set() and cleared on the
+        next idle cycle stays raised for a short while afterwards. If the user
+        grabbed the slider during that window their drag events were silently
+        discarded: the widget had moved but the index had not, and the next
+        redraw wrote the stale index back - the slider appeared to snap back.
+        Remembering the value we wrote and ignoring exactly that one callback
+        removes the timing dependency altogether.
+        """
+        slider = self.area_sliders[area] if area < len(self.area_sliders) else None
+        if slider is None:
+            return
+
+        # Never reposition a handle the pointer is holding. A long redraw - a
+        # 4K seek can take hundreds of milliseconds - blocks the event loop,
+        # and any programmatic move that lands in that window would yank the
+        # handle out from under the user and look like the slider jumping back.
+        if self._slider_dragging[area]:
+            print(f"Area {area + 1}: slider is being dragged, not moving it")
+            return
+
+        self._expected_slider_value[area] = int(slider_value) - 1   # store 0-based
+        slider.set(int(slider_value))
+
+    def _on_slider_press(self, area):
+        self._slider_dragging[area] = True
+        # Drop any stale expectation: if a programmatic set had left one
+        # unconsumed, it would swallow one of the user's own drag events.
+        self._expected_slider_value[area] = None
+
+    def _on_slider_release(self, area):
+        """
+        Widget bindings run BEFORE class bindings in Tk, so at this point
+        tk::ScaleButtonUp has not finished and the widget may still hold an
+        intermediate value from the middle of the drag. Reading it here and
+        forcing the state onto it moved the displayed frame backwards while
+        the handle stayed where the user left it. The read is therefore
+        deferred until Tk has settled.
+        """
+        self._slider_dragging[area] = False
+        win = self.root if self.root is not None else self.second_window
+        if win is None:
+            self._sync_slider_after_release(area)
+            return
+        try:
+            win.after_idle(lambda a=area: self._sync_slider_after_release(a))
+        except tk.TclError:
+            self._sync_slider_after_release(area)
+
+    def _sync_slider_after_release(self, area):
+        """Adopt the position the handle actually ended on."""
+        slider = self.area_sliders[area] if area < len(self.area_sliders) else None
+        if slider is None:
+            return
+        try:
+            landed = int(float(slider.get())) - 1
+        except (tk.TclError, ValueError):
+            return
+        n = self.area_frame_count(area)
+        if not n:
+            return
+        landed = max(0, min(landed, n - 1))
+        if landed == self.area_indices[area]:
+            return
+        print(f"Area {area + 1}: re-syncing to the released position "
+              f"{landed + 1} (state was {self.area_indices[area] + 1})")
+        self.area_indices[area] = landed
+        self.release_frame_override(area, "slider release")
+        self.display_mode = 'frame'
+        self._update_area_counter_label(area)
+        self._schedule_area_redraw()
+
+    def pinned_positions(self):
+        """
+        Position of each pinned frame inside its own selection, 1-based on
+        display. Returns [None, None] when nothing is pinned.
+        """
+        lists = [self.area1_frame_indices, self.area2_frame_indices]
+        out = []
+        for i in range(2):
+            frame = self.frame_override[i] if i < len(self.frame_override) else None
+            if frame is None or i >= len(lists) or frame not in lists[i]:
+                out.append(None)
+            else:
+                out.append(lists[i].index(frame))
+        return out
+
+    def _update_area_counter_label(self, area=None):
+        """Refresh one counter, or both when no area is given."""
+        targets = range(2) if area is None else [area]
+        counts = self.area_frame_counts()
+        for i in targets:
+            label = self.area_counter_labels[i] if i < len(self.area_counter_labels) else None
+            if label is None:
+                continue
+            text = f"{self.area_indices[i] + 1} / {counts[i]}"
+            # A pinned frame is marked, so it is obvious that the position was
+            # chosen by "Find maximum contact area" rather than by hand.
+            if self.frame_override[i] is not None:
+                text += " \u2605"
             try:
-                self.area_counter_label.config(
-                    text=f"{self.current_area_index + 1} / {self.area_frame_count()}"
-                )
+                label.config(text=text)
             except tk.TclError:
                 pass
 
@@ -1286,11 +1552,11 @@ class Gait2SFI:
         finally:
             self._clear_suppression_later('_suppress_lut_cb')
 
-    def set_area_index(self, index, wrap=False):
-        """Central entry point for any change of the current frame in the second window."""
-        n = self.area_frame_count()
+    def set_area_index(self, area, index, wrap=False, redraw=True):
+        """Central entry point for moving ONE area to a position in its sequence."""
+        n = self.area_frame_count(area)
         if n == 0:
-            print("No area frames available for navigation")
+            print(f"Area {area + 1}: no frames available for navigation")
             return
 
         if wrap:
@@ -1298,26 +1564,55 @@ class Gait2SFI:
         else:
             index = max(0, min(int(index), n - 1))
 
-        if index == self.current_area_index and self.area_slider is not None:
-            # Already there - nothing to do (e.g. arrow pressed at the edge)
-            self._update_area_counter_label()
+        if index == self.area_indices[area] and self.frame_override[area] is None:
+            self._update_area_counter_label(area)
             return
 
-        self.current_area_index = index
-        # Real navigation is the ONLY thing that releases a pinned frame.
-        # Contrast/brightness deliberately survive a frame change - they are
-        # cleared only by the Reset button next to their sliders.
-        self.release_frame_override("navigation")
+        self.area_indices[area] = index
+        # Moving an area is the ONLY thing that releases ITS pinned frame; the
+        # other area keeps whatever it was showing. Contrast and brightness
+        # survive a frame change and are cleared only by their Reset button.
+        self.release_frame_override(area, "navigation")
         self.display_mode = 'frame'   # navigating leaves the accumulated view
-        self._set_area_slider_silently(index + 1)
-        self._update_area_counter_label()
-        self.update_area_frames()
+        self._set_area_slider_silently(area, index + 1)
+        self._update_area_counter_label(area)
+        if redraw:
+            self.update_area_frames()
 
-    def release_frame_override(self, reason=""):
-        """Drop the pinned frames so the slider position takes effect again."""
-        if any(f is not None for f in self.frame_override):
-            print(f"Releasing pinned frames ({reason})")
-        self.frame_override = [None, None]
+    def _focus_handles_arrows(self):
+        """
+        True when the focused widget reacts to arrow keys on its own.
+
+        Widget bindings run before toplevel bindings in Tk, so a focused Scale
+        moves itself AND then the window-level binding fires - one key press
+        advanced the area twice.
+        """
+        try:
+            widget = self.second_window.focus_get()
+        except (tk.TclError, AttributeError):
+            return False
+        return isinstance(widget, (tk.Scale, tk.Entry, tk.Spinbox))
+
+    def step_both_areas(self, way):
+        """Keyboard arrows: move both areas together, as a quick scan."""
+        if self._focus_handles_arrows():
+            return
+        moved = False
+        for i in range(2):
+            target = self.area_indices[i] + int(way)
+            if 0 <= target < self.area_frame_count(i):
+                self.set_area_index(i, target, redraw=False)
+                moved = True
+        if moved:
+            self.update_area_frames()
+
+    def release_frame_override(self, area=None, reason=""):
+        """Drop the pinned frame of one area, or of both when none is given."""
+        targets = range(2) if area is None else [area]
+        for i in targets:
+            if self.frame_override[i] is not None:
+                print(f"Area {i + 1}: releasing pinned frame ({reason})")
+                self.frame_override[i] = None
 
     def _schedule_area_redraw(self, delay_ms=80):
         """Debounce: while the slider is dragged only the last position is rendered."""
@@ -1335,43 +1630,49 @@ class Gait2SFI:
         self._update_area_counter_label()
         self.redraw_current_view()
 
-    def on_area_slider_change(self, value):
-        if self._suppress_slider_cb:
-            return
-        n = self.area_frame_count()
+    def on_area_slider_change(self, area, value):
+        n = self.area_frame_count(area)
         if n == 0:
             return
 
         # Slider is 1-based -> internal index is 0-based
-        new_index = int(float(value)) - 1
-        new_index = max(0, min(new_index, n - 1))
-        if new_index == self.current_area_index:
+        new_index = max(0, min(int(float(value)) - 1, n - 1))
+
+        # Swallow exactly the callback caused by our own .set(), and only that
+        # one. Any other value is a real user action, whenever it arrives.
+        if self._expected_slider_value[area] == new_index:
+            self._expected_slider_value[area] = None
+            return
+
+        if new_index == self.area_indices[area] and self.frame_override[area] is None:
             return
 
         self.last_update_time = time.time()
-        self.current_area_index = new_index
-        self.release_frame_override("slider")
+        self.area_indices[area] = new_index
+        self.release_frame_override(area, "slider")
         self.display_mode = 'frame'
+        self._update_area_counter_label(area)
         # No frames are dropped any more: the redraw is postponed, not skipped,
         # so the position the user releases the slider on is always rendered.
         self._schedule_area_redraw()
 
-    def goto_area_frame(self, way=0):
-        """way = -1 previous frame, +1 next frame, 0 no-op. No wrap-around at the edges."""
-        n = self.area_frame_count()
+    def goto_area_frame(self, area, way=0):
+        """way = -1 previous frame, +1 next frame. No wrap-around at the edges."""
+        n = self.area_frame_count(area)
         if n == 0:
-            print("No area frames available for navigation")
+            print(f"Area {area + 1}: no frames available for navigation")
             return
         if way == 0:
             return
 
-        target = self.current_area_index + int(way)
+        target = self.area_indices[area] + int(way)
         if not (0 <= target < n):
-            print(f"Edge of the selection reached (index {self.current_area_index}, range 0..{n-1})")
+            print(f"Area {area + 1}: edge of the selection reached "
+                  f"(index {self.area_indices[area]}, range 0..{n - 1})")
             return
 
         self.last_update_time = time.time()
-        self.set_area_index(target, wrap=False)
+        self.set_area_index(area, target, wrap=False)
 
     # ------------------------------------------------------------------
     #  Selective summation: which frames of the selection to accumulate
@@ -1688,20 +1989,30 @@ class Gait2SFI:
         print(f"Updated frame {self.current_frame} with {len(self.rectangles)} fixed areas in {time.time() - start_time:.3f}s")
 
     def next_area_frame(self, event=None):
-        # Up arrow: cyclic navigation
+        # Up arrow: cyclic navigation of both areas
+        if self._focus_handles_arrows():
+            return
         if self.area_frame_count() == 0:
             print("No area frames available for navigation")
             return
         self.last_update_time = time.time()
-        self.set_area_index(self.current_area_index + 1, wrap=True)
+        for i in range(2):
+            if self.area_frame_count(i):
+                self.set_area_index(i, self.area_indices[i] + 1, wrap=True, redraw=False)
+        self.update_area_frames()
 
     def prev_area_frame(self, event=None):
-        # Down arrow: cyclic navigation
+        # Down arrow: cyclic navigation of both areas
+        if self._focus_handles_arrows():
+            return
         if self.area_frame_count() == 0:
             print("No area frames available for navigation")
             return
         self.last_update_time = time.time()
-        self.set_area_index(self.current_area_index - 1, wrap=True)
+        for i in range(2):
+            if self.area_frame_count(i):
+                self.set_area_index(i, self.area_indices[i] - 1, wrap=True, redraw=False)
+        self.update_area_frames()
 
     def run(self):
         print("Starting main loop")
