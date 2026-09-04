@@ -1,6 +1,6 @@
 # Gait2SFI
 
-Gait2SFI is a package of scripts for the automated computation of the Sciatic Functional Index (SFI) from video recordings of rodent locomotion, developed for the rat sciatic nerve injury model. The package allows an investigator to locate suitable hind paw prints in a walking-track recording, measure the print parameters required by the SFI formula, compute the index, and export the results in a form suitable for statistical analysis. A companion script performs unsupervised detection of all paw contacts in a recording and labels them by limb.
+Gait2SFI is a package of scripts for the semi-automated computation of the Sciatic Functional Index (SFI) from video recordings of rodent locomotion, developed for the rat sciatic nerve injury model. The package allows an investigator to locate suitable hind paw prints in a walking-track recording, measure the print parameters required by the SFI formula, compute the index, and export the results in a form suitable for statistical analysis. A companion script performs unsupervised detection of all paw contacts in a recording and labels them by limb.
 
 The method is intended for neuroscience, preclinical studies of peripheral nerve regeneration, and quantitative behavioural analysis in laboratory animals.
 
