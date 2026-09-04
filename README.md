@@ -6,7 +6,7 @@ The method is intended for neuroscience, preclinical studies of peripheral nerve
 
 ## Principle of measurement
 
-The walkway is a glass plate illuminated from the edge, so that light is confined by total internal reflection. Where a paw presses against the glass, the reflection is frustrated and light is scattered towards the camera positioned beneath the plate. The resulting print appears as a bright region whose area and intensity increase with contact pressure. A second, red illumination source placed above the plate renders the animal as a dark silhouette against a bright background, which permits the body to be segmented independently of the prints. This arrangement is a form of frustrated total internal reflection (fTIR) imaging.
+The walkway consists of a glass plate illuminated with green light from its edge. When a paw presses against the glass, the total internal reflection is frustrated, causing light to scatter toward a camera positioned beneath the plate. The resulting paw print appears as a bright region, whose area and intensity increase with contact pressure. A second, red illumination source positioned above the plate renders the animal as a dark silhouette against a bright background, allowing the body to be segmented independently of the paw prints. The third light source is white and directed parallel to the glass plate to optionally highlight the morphology of the animal's paws. This arrangement is a form of frustrated total internal reflection (FTIR) imaging.
 
 ## Getting started
 
