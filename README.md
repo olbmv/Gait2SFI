@@ -84,7 +84,7 @@ After both regions have been selected, a second window opens showing the two reg
 
 **Find maximum contact area.** Every frame of the selection is examined and each region is set to the frame with the largest contact area, that is, the moment of fullest weight bearing. The frame chosen in this way is retained across redrawing operations, including the clearing of measurements, and is released only when the frames are changed deliberately with the slider or the arrow buttons.
 
-**Show total contact area.** The contact areas of several frames are accumulated into a single image, which is useful when a single frame does not capture the whole print. The field **Sum frames** determines which frames of the selection contribute. Positions are numbered from 1 within the selection and the following forms are accepted:
+**Show total contact area.** The contact areas of several frames are accumulated into a single image, which is useful when a single frame does not capture the whole print. The field **Composite footprint** determines which frames of the selection contribute. Positions are numbered from 1 within the selection and the following forms are accepted:
 
 | Entry | Frames summed |
 | --- | --- |
