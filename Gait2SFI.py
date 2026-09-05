@@ -595,9 +595,9 @@ class Gait2SFI:
                                           lambda e, a=i: self._on_slider_release(a), add='+')
                 self._set_area_slider_silently(i, 1)
 
-            tk.Label(nav_frame,
-                     text="Arrow keys move both areas together",
-                     font=("Arial", 8), fg="gray40").pack(pady=(2, 0))
+            #tk.Label(nav_frame,
+            #         text="Arrow keys move both areas together",
+            #         font=("Arial", 8), fg="gray40").pack(pady=(2, 0))
 
             # Bound to the WINDOW, not to a frame: a tk.Frame never takes the
             # keyboard focus, so binding there would never fire.
