@@ -212,7 +212,7 @@ The quality of the segmentation depends chiefly on the recording. A green filter
 
 ## Citation
 
-If this software is used in published work, please cite the accompanying publication and this repository.
+If this software is used in [published work](https://doi.org/10.25305/unj.354660), please cite the accompanying publication and this repository.
 
 ## Demo
 Gait2SFI Demo. Another example (more detailed) in Gait2SFI_Demo.mp4
